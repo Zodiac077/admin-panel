@@ -31,9 +31,8 @@ import {
 import { toast } from 'sonner';
 
 // Use relative paths for Netlify, localhost for development
-const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
-  ? 'http://localhost:5000/api' 
-  : '/api';
+const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+const API_URL = isLocalhost ? 'http://localhost:5000/api' : '/api';
 
 interface Message {
   id: string;
@@ -64,14 +63,28 @@ export function AdminPanel({ onLogout, isDarkMode, toggleTheme }: AdminPanelProp
   // Fetch messages from database
   const fetchMessages = async () => {
     try {
-      console.log('🔄 Fetching messages from:', API_URL + '/messages');
-      const response = await fetch(`${API_URL}/messages`);
-      console.log('📦 Response status:', response.status);
+      console.log('🔄 Fetching from:', `${API_URL}/messages`);
+      const response = await fetch(`${API_URL}/messages`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      console.log('📦 Response status:', response.status, response.statusText);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch messages');
+        const errorText = await response.text();
+        console.error('❌ Response error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+      
       const data = await response.json();
       console.log('📥 Raw data from API:', data);
+      
+      if (!Array.isArray(data)) {
+        throw new Error('API response is not an array');
+      }
+      
       // Map MongoDB _id to id for compatibility and handle subject/title fields
       const mappedData = data.map((msg: any) => ({
         id: msg._id,
@@ -86,11 +99,12 @@ export function AdminPanel({ onLogout, isDarkMode, toggleTheme }: AdminPanelProp
       setMessages(mappedData);
       setError(null);
       setLoading(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error('❌ Error fetching messages:', err);
-      setError('Unable to connect to database. Make sure the server is running on port 5000.');
+      const errorMsg = err?.message || 'Unknown error';
+      setError(`Connection Error: ${errorMsg}`);
       setLoading(false);
-      toast.error('Failed to load messages from database');
+      toast.error(`Failed to load messages: ${errorMsg}`);
     }
   };
 
