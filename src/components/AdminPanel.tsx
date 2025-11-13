@@ -227,31 +227,48 @@ export function AdminPanel({ onLogout, isDarkMode, toggleTheme }: AdminPanelProp
     setSelectedMessage(message);
     if (!message.read) {
       try {
-        await fetch(`${API_URL}/contacts/${message.id}`, {
+        console.log('📝 Marking as read:', message.id);
+        const response = await fetch(`${API_URL}/contacts/${message.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ read: true })
         });
+        console.log('📝 Response status:', response.status);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('❌ Error response:', errorData);
+        } else {
+          const data = await response.json();
+          console.log('✅ Marked as read:', data);
+        }
         
         const updated = messages.map((m) =>
           m.id === message.id ? { ...m, read: true } : m
         );
         setMessages(updated);
       } catch (err) {
-        console.error('Error marking contact as read:', err);
+        console.error('❌ Error marking contact as read:', err);
       }
     }
   };
 
   const handleDelete = async (id: string) => {
     try {
+      console.log('🗑️ Deleting contact:', id);
       const response = await fetch(`${API_URL}/contacts/${id}`, {
         method: 'DELETE'
       });
+      console.log('🗑️ Response status:', response.status);
       
       if (!response.ok) {
-        throw new Error('Failed to delete contact');
+        const errorData = await response.json();
+        console.error('❌ Delete error:', errorData);
+        throw new Error(`Failed to delete contact: ${errorData.message || 'Unknown error'}`);
       }
+      
+      const data = await response.json();
+      console.log('✅ Deleted:', data);
       
       const updated = messages.filter((m) => m.id !== id);
       setMessages(updated);
@@ -261,8 +278,8 @@ export function AdminPanel({ onLogout, isDarkMode, toggleTheme }: AdminPanelProp
       }
       toast.success('Contact deleted successfully');
     } catch (err) {
-      console.error('Error deleting contact:', err);
-      toast.error('Failed to delete contact');
+      console.error('❌ Error deleting contact:', err);
+      toast.error(`Failed to delete contact: ${err}`);
     }
   };
 
