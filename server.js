@@ -104,6 +104,16 @@ app.get('/api/messages', async (req, res) => {
   }
 });
 
+// Get all contacts (alias for messages)
+app.get('/api/contacts', async (req, res) => {
+  try {
+    const messages = await Message.find().sort({ createdAt: -1, date: -1 });
+    res.json({ success: true, data: messages });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Get single message
 app.get('/api/messages/:id', async (req, res) => {
   try {
@@ -138,7 +148,7 @@ app.post('/api/messages', async (req, res) => {
   }
 });
 
-// Update message (mark as read)
+// Update message (mark as read) - /messages endpoint
 app.patch('/api/messages/:id', async (req, res) => {
   try {
     const { read } = req.body;
@@ -153,13 +163,38 @@ app.patch('/api/messages/:id', async (req, res) => {
   }
 });
 
-// Delete message
+// Update message (mark as read) - /contacts endpoint
+app.patch('/api/contacts/:id', async (req, res) => {
+  try {
+    const { read } = req.body;
+    const message = await Message.findByIdAndUpdate(
+      req.params.id,
+      { read },
+      { new: true }
+    );
+    res.json({ success: true, data: message });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Delete message - /messages endpoint
 app.delete('/api/messages/:id', async (req, res) => {
   try {
     await Message.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete message - /contacts endpoint
+app.delete('/api/contacts/:id', async (req, res) => {
+  try {
+    await Message.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
