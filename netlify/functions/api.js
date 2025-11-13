@@ -1,7 +1,4 @@
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 // MongoDB Connection
 let conn = null;
@@ -11,12 +8,16 @@ const connectDB = async () => {
     return conn;
   }
   
+  // In Netlify, env vars are passed directly, no need for dotenv
   const mongoURI = process.env.MONGODB_URI;
   if (!mongoURI) {
-    throw new Error('MONGODB_URI is not defined');
+    console.error('MONGODB_URI environment variable is not set');
+    throw new Error('MONGODB_URI is not defined. Please set it in Netlify environment variables.');
   }
   
+  console.log('Connecting to MongoDB...');
   conn = await mongoose.connect(mongoURI);
+  console.log('MongoDB connected successfully');
   return conn;
 };
 
