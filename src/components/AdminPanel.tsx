@@ -227,7 +227,7 @@ export function AdminPanel({ onLogout, isDarkMode, toggleTheme }: AdminPanelProp
     setSelectedMessage(message);
     if (!message.read) {
       try {
-        await fetch(`${API_URL}/messages/${message.id}`, {
+        await fetch(`${API_URL}/contacts/${message.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ read: true })
@@ -238,19 +238,19 @@ export function AdminPanel({ onLogout, isDarkMode, toggleTheme }: AdminPanelProp
         );
         setMessages(updated);
       } catch (err) {
-        console.error('Error marking message as read:', err);
+        console.error('Error marking contact as read:', err);
       }
     }
   };
 
   const handleDelete = async (id: string) => {
     try {
-      const response = await fetch(`${API_URL}/messages/${id}`, {
+      const response = await fetch(`${API_URL}/contacts/${id}`, {
         method: 'DELETE'
       });
       
       if (!response.ok) {
-        throw new Error('Failed to delete message');
+        throw new Error('Failed to delete contact');
       }
       
       const updated = messages.filter((m) => m.id !== id);
@@ -259,10 +259,10 @@ export function AdminPanel({ onLogout, isDarkMode, toggleTheme }: AdminPanelProp
       if (selectedMessage?.id === id) {
         setSelectedMessage(null);
       }
-      toast.success('Message deleted successfully');
+      toast.success('Contact deleted successfully');
     } catch (err) {
-      console.error('Error deleting message:', err);
-      toast.error('Failed to delete message');
+      console.error('Error deleting contact:', err);
+      toast.error('Failed to delete contact');
     }
   };
 
