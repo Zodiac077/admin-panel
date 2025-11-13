@@ -1,27 +1,35 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
-let cachedConn = null;
+let cachedConnection = null;
 
-const connectDB = async () => {
-  if (cachedConn && cachedConn.connection.readyState === 1) {
-    console.log('Using cached DB connection');
-    return cachedConn;
+async function connectToDatabase() {
+  if (cachedConnection) {
+    console.log('[DB] Using cached connection');
+    return cachedConnection;
   }
 
-  const uri = process.env.MONGODB_URI;
-  if (!uri) {
-    throw new Error('MONGODB_URI not set in environment variables');
+  try {
+    const mongoUri = process.env.MONGODB_URI;
+    if (!mongoUri) {
+      throw new Error('MONGODB_URI environment variable is missing');
+    }
+
+    console.log('[DB] Connecting to MongoDB...');
+    const connection = await mongoose.connect(mongoUri, {
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+    });
+
+    cachedConnection = connection;
+    console.log('[DB] Connected successfully');
+    return connection;
+  } catch (error) {
+    console.error('[DB] Connection error:', error.message);
+    throw error;
   }
+}
 
-  console.log('Creating new MongoDB connection...');
-  cachedConn = await mongoose.connect(uri, {
-    serverSelectionTimeoutMS: 5000,
-  });
-  console.log('MongoDB connected');
-  return cachedConn;
-};
-
-const messageSchema = new mongoose.Schema(
+const contactSchema = new mongoose.Schema(
   {
     name: String,
     email: String,
@@ -35,101 +43,144 @@ const messageSchema = new mongoose.Schema(
   { collection: 'contacts' }
 );
 
-let Message;
+let Contact = null;
 
-const getMessageModel = () => {
-  if (!Message) {
-    Message = mongoose.model('Message', messageSchema);
+function getContactModel() {
+  if (!Contact) {
+    Contact = mongoose.model('Contact', contactSchema);
   }
-  return Message;
-};
+  return Contact;
+}
 
 exports.handler = async (event) => {
+  console.log(`[API] ${event.httpMethod} ${event.path}`);
+
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
   };
 
   try {
-    console.log(`${event.httpMethod} ${event.path}`);
+    // Handle CORS preflight
+    if (event.httpMethod === 'OPTIONS') {
+      return { statusCode: 200, headers };
+    }
+
+    // Connect to database
+    await connectToDatabase();
+    const ContactModel = getContactModel();
+
+    // GET all contacts
+    if (event.httpMethod === 'GET' && event.path.includes('/messages')) {
+      console.log('[API] Fetching all contacts...');
+      const contacts = await ContactModel.find().sort({ createdAt: -1, date: -1 }).limit(100);
+      console.log(`[API] Found ${contacts.length} contacts`);
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(contacts),
+      };
+    }
+
+    // Extract ID from path
+    const idMatch = event.path.match(/\/messages\/([a-zA-Z0-9]+)$/);
     
-    await connectDB();
-    const MessageModel = getMessageModel();
+    if (idMatch) {
+      const contactId = idMatch[1];
+      
+      // GET single contact
+      if (event.httpMethod === 'GET') {
+        console.log(`[API] Fetching contact ${contactId}...`);
+        const contact = await ContactModel.findById(contactId);
+        
+        if (!contact) {
+          return {
+            statusCode: 404,
+            headers,
+            body: JSON.stringify({ error: 'Contact not found' }),
+          };
+        }
 
-    // GET all messages
-    if (event.path === '/.netlify/functions/api/messages' && event.httpMethod === 'GET') {
-      const messages = await MessageModel.find().sort({ createdAt: -1, date: -1 });
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify(messages),
-      };
-    }
-
-    // GET single message
-    const idMatch = event.path.match(/\/(\w+)$/);
-    if (idMatch && event.httpMethod === 'GET') {
-      const id = idMatch[1];
-      const message = await MessageModel.findById(id);
-      if (!message) {
-        return { statusCode: 404, headers, body: JSON.stringify({ error: 'Not found' }) };
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify(contact),
+        };
       }
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify(message),
-      };
+
+      // PATCH update contact
+      if (event.httpMethod === 'PATCH') {
+        console.log(`[API] Updating contact ${contactId}...`);
+        const updateData = JSON.parse(event.body || '{}');
+        const contact = await ContactModel.findByIdAndUpdate(
+          contactId,
+          updateData,
+          { new: true }
+        );
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify(contact),
+        };
+      }
+
+      // DELETE contact
+      if (event.httpMethod === 'DELETE') {
+        console.log(`[API] Deleting contact ${contactId}...`);
+        await ContactModel.findByIdAndDelete(contactId);
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, message: 'Contact deleted' }),
+        };
+      }
     }
 
-    // PATCH message
-    if (idMatch && event.httpMethod === 'PATCH') {
-      const id = idMatch[1];
-      const data = JSON.parse(event.body || '{}');
-      const message = await MessageModel.findByIdAndUpdate(id, data, { new: true });
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify(message),
-      };
-    }
-
-    // DELETE message
-    if (idMatch && event.httpMethod === 'DELETE') {
-      const id = idMatch[1];
-      await MessageModel.findByIdAndDelete(id);
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ success: true }),
-      };
-    }
-
-    // POST message
-    if (event.path === '/.netlify/functions/api/messages' && event.httpMethod === 'POST') {
-      const data = JSON.parse(event.body || '{}');
-      const msg = new MessageModel({
-        ...data,
+    // POST create contact
+    if (event.httpMethod === 'POST' && event.path.includes('/messages')) {
+      console.log('[API] Creating new contact...');
+      const newContactData = JSON.parse(event.body || '{}');
+      
+      const newContact = new ContactModel({
+        ...newContactData,
         createdAt: new Date(),
+        date: new Date(),
       });
-      const saved = await msg.save();
+
+      const savedContact = await newContact.save();
+      console.log('[API] Contact created:', savedContact._id);
+
       return {
         statusCode: 201,
         headers,
-        body: JSON.stringify(saved),
+        body: JSON.stringify(savedContact),
       };
     }
 
+    // 404 - Route not found
     return {
       statusCode: 404,
       headers,
-      body: JSON.stringify({ error: 'Not found' }),
+      body: JSON.stringify({
+        error: 'Not found',
+        path: event.path,
+        method: event.httpMethod,
+      }),
     };
   } catch (error) {
-    console.error('Error:', error);
+    console.error('[API] Error:', error);
+    
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: error.message }),
+      body: JSON.stringify({
+        error: 'Internal server error',
+        message: error.message,
+      }),
     };
   }
 };
