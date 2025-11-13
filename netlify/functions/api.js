@@ -42,11 +42,18 @@ export const handler = async (event, context) => {
   try {
     await connectDB();
     
-    const { path, httpMethod, body } = event;
+    // Netlify passes path differently - get the actual path
+    const path = event.rawPath || event.path || '';
+    const httpMethod = event.requestContext?.http?.method || event.httpMethod || 'GET';
+    const body = event.body;
     
-    // GET /api/messages
-    if (path === '/api/messages' && httpMethod === 'GET') {
+    console.log(`[API] ${httpMethod} ${path}`);
+    
+    // GET /api/messages - list all messages
+    if ((path === '/api/messages' || path.endsWith('/api/messages')) && httpMethod === 'GET') {
+      console.log('Fetching all messages...');
       const messages = await Message.find().sort({ createdAt: -1, date: -1 });
+      console.log(`Found ${messages.length} messages`);
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -54,12 +61,20 @@ export const handler = async (event, context) => {
       };
     }
     
-    // GET /api/messages/:id
-    if (path.match(/^\/api\/messages\/[a-z0-9]+$/i) && httpMethod === 'GET') {
-      const id = path.split('/').pop();
+    // Extract ID from path for /:id routes
+    const idMatch = path.match(/\/api\/messages\/([a-z0-9]+)/i);
+    const id = idMatch ? idMatch[1] : null;
+    
+    // GET /api/messages/:id - get single message
+    if (id && httpMethod === 'GET') {
+      console.log(`Fetching message ${id}...`);
       const message = await Message.findById(id);
       if (!message) {
-        return { statusCode: 404, body: JSON.stringify({ error: 'Not found' }) };
+        return { 
+          statusCode: 404, 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Not found' }) 
+        };
       }
       return {
         statusCode: 200,
@@ -68,10 +83,10 @@ export const handler = async (event, context) => {
       };
     }
     
-    // PATCH /api/messages/:id
-    if (path.match(/^\/api\/messages\/[a-z0-9]+$/i) && httpMethod === 'PATCH') {
-      const id = path.split('/').pop();
-      const data = JSON.parse(body);
+    // PATCH /api/messages/:id - update message
+    if (id && httpMethod === 'PATCH') {
+      console.log(`Updating message ${id}...`);
+      const data = JSON.parse(body || '{}');
       const message = await Message.findByIdAndUpdate(id, data, { new: true });
       return {
         statusCode: 200,
@@ -80,9 +95,9 @@ export const handler = async (event, context) => {
       };
     }
     
-    // DELETE /api/messages/:id
-    if (path.match(/^\/api\/messages\/[a-z0-9]+$/i) && httpMethod === 'DELETE') {
-      const id = path.split('/').pop();
+    // DELETE /api/messages/:id - delete message
+    if (id && httpMethod === 'DELETE') {
+      console.log(`Deleting message ${id}...`);
       await Message.findByIdAndDelete(id);
       return {
         statusCode: 200,
@@ -91,9 +106,10 @@ export const handler = async (event, context) => {
       };
     }
     
-    // POST /api/messages
-    if (path === '/api/messages' && httpMethod === 'POST') {
-      const data = JSON.parse(body);
+    // POST /api/messages - create message
+    if ((path === '/api/messages' || path.endsWith('/api/messages')) && httpMethod === 'POST') {
+      console.log('Creating new message...');
+      const data = JSON.parse(body || '{}');
       const newMessage = new Message({
         ...data,
         date: new Date(),
@@ -106,13 +122,18 @@ export const handler = async (event, context) => {
       };
     }
     
-    return { statusCode: 404, body: JSON.stringify({ error: 'Not found' }) };
+    console.log(`No route matched for ${httpMethod} ${path}`);
+    return { 
+      statusCode: 404, 
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Not found' }) 
+    };
   } catch (error) {
     console.error('Error:', error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: error.message }),
+      body: JSON.stringify({ error: error.message || 'Internal server error' }),
     };
   }
 };
