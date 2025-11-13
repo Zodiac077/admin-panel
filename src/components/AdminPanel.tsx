@@ -30,9 +30,8 @@ import {
 } from './ui/alert-dialog';
 import { toast } from 'sonner';
 
-// Use relative paths for Netlify, localhost for development
-const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-const API_URL = isLocalhost ? 'http://localhost:5000/api' : '/api';
+// Railway backend URL - works everywhere
+const API_URL = 'https://web-production-966d0.up.railway.app/api';
 
 interface Message {
   id: string;
@@ -94,9 +93,9 @@ export function AdminPanel({ onLogout, isDarkMode, toggleTheme }: AdminPanelProp
   // Fetch messages from database or use sample data
   const fetchMessages = async () => {
     try {
-      console.log('🔄 Fetching from:', `${API_URL}/messages`);
+      console.log('🔄 Fetching from:', `${API_URL}/contacts`);
       
-      const response = await fetch(`${API_URL}/messages`, {
+      const response = await fetch(`${API_URL}/contacts`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -109,14 +108,14 @@ export function AdminPanel({ onLogout, isDarkMode, toggleTheme }: AdminPanelProp
         console.log('📥 Data from API:', data);
         
         if (Array.isArray(data) && data.length > 0) {
-          // Map MongoDB _id to id
+          // Map API response to component data structure
           const mappedData = data.map((msg: any) => ({
-            id: msg._id,
+            id: msg._id || msg.id,
             name: msg.name,
             email: msg.email,
             subject: msg.subject || msg.title || 'No Subject',
             message: msg.message,
-            date: msg.date,
+            date: msg.date || msg.createdAt,
             read: msg.read || false
           }));
           console.log('✅ Mapped data:', mappedData);
