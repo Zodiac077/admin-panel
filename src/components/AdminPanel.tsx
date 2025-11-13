@@ -104,8 +104,11 @@ export function AdminPanel({ onLogout, isDarkMode, toggleTheme }: AdminPanelProp
       console.log('📦 Response status:', response.status);
       
       if (response.ok) {
-        const data = await response.json();
-        console.log('📥 Data from API:', data);
+        const jsonData = await response.json();
+        console.log('📥 Raw data from API:', jsonData);
+        
+        // Railway API wraps data in { success, data }
+        const data = jsonData.data || jsonData;
         
         if (Array.isArray(data) && data.length > 0) {
           // Map API response to component data structure
@@ -113,9 +116,9 @@ export function AdminPanel({ onLogout, isDarkMode, toggleTheme }: AdminPanelProp
             id: msg._id || msg.id,
             name: msg.name,
             email: msg.email,
-            subject: msg.subject || msg.title || 'No Subject',
+            subject: msg.title || msg.subject || 'No Subject',
             message: msg.message,
-            date: msg.date || msg.createdAt,
+            date: msg.createdAt || msg.date,
             read: msg.read || false
           }));
           console.log('✅ Mapped data:', mappedData);
